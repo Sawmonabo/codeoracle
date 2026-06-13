@@ -1,0 +1,45 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard"
+  ],
+  "rangeStrategy": "pin",
+  "schedule": ["before 4am on Monday"],
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 4am on Monday"]
+  },
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "description": "Astral toolchain (ruff, ty, uv) — bump as one PR",
+      "matchPackageNames": ["ruff", "ty", "uv"],
+      "groupName": "astral toolchain"
+    },
+    {
+      "description": "pytest ecosystem",
+      "matchPackageNames": ["pytest", "pytest-*"],
+      "groupName": "pytest ecosystem"
+    },
+    {
+      "description": "GitHub Actions",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    },
+    {
+      "description": "Pre-commit hooks",
+      "matchManagers": ["pre-commit"],
+      "groupName": "pre-commit hooks"
+    },
+    {
+      "description": "Majors require explicit approval to keep weekly noise down",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    }
+  ]
+}

@@ -1,0 +1,264 @@
+# CodeOracle E2E application-process overlay.
+#
+# Run with the dependency stack:
+#   docker compose --env-file infra/versions/pinned.env \
+#     -f infra/compose/docker-compose.yml \
+#     -f infra/compose/docker-compose.e2e.yml up -d
+
+x-codeoracle-build: &codeoracle-build
+  image: codeoracle:slice-e2e
+  build:
+    context: ../..
+    dockerfile: infra/docker/Dockerfile
+
+x-db-env: &db-env
+  CODEORACLE_DB__HOST: postgres
+  CODEORACLE_DB__PORT: '5432'
+  CODEORACLE_DB__USER: codeoracle
+  CODEORACLE_DB__PASSWORD: codeoracle
+  CODEORACLE_DB__DATABASE: codeoracle
+  CODEORACLE_DB__POOL_SIZE: '5'
+  CODEORACLE_DB__MAX_OVERFLOW: '10'
+  CODEORACLE_DB__POOL_TIMEOUT: '30'
+
+x-valkey-env: &valkey-env
+  CODEORACLE_VALKEY__URL: redis://valkey:6379/0
+  CODEORACLE_VALKEY__POOL_MIN: '1'
+  CODEORACLE_VALKEY__POOL_MAX: '10'
+  CODEORACLE_VALKEY__BLOCK_MS_DEFAULT: '5000'
+  CODEORACLE_VALKEY__MAX_IN_FLIGHT_PER_CONSUMER: '10'
+  CODEORACLE_VALKEY__STREAM_MAXLEN: '1000000'
+
+x-llm-env: &llm-env
+  CODEORACLE_LLM_PROVIDER: mock
+  CODEORACLE_LLM_MOCK__SCRIPTS_DIR: /workspace/tests/fixtures/llm_scripts
+  CODEORACLE_LLM_MOCK__STRICT: 'true'
+
+x-embedding-env: &embedding-env
+  CODEORACLE_EMBEDDING__MODEL: text-embedding-3-small
+  CODEORACLE_EMBEDDING__DIM: '1536'
+  CODEORACLE_EMBEDDING__KIND: mock
+  CODEORACLE_EMBEDDING__BASE_URL: https://api.openai.com
+  CODEORACLE_EMBEDDING__API_KEY: ''
+
+x-runtime-env: &runtime-env
+  <<: [*db-env, *llm-env, *embedding-env]
+  CODEORACLE_ENVIRONMENT: e2e
+  CODEORACLE_LOG_LEVEL: INFO
+  CODEORACLE_INDEXING__REPO_ROOT: /workspace
+  CODEORACLE_INDEXING__EXTRACTOR_KINDS: '["joern","scip","opengrep","embed"]'
+  CODEORACLE_TRACES__TEMPO_URL: http://tempo:3200
+  CODEORACLE_TRACES__TEMPO_TIMEOUT_SECONDS: '5'
+  CODEORACLE_TRACES__TICK_INTERVAL_SECONDS: '30'
+  CODEORACLE_TRACES__SEARCH_LIMIT: '50'
+  CODEORACLE_TRACES__MAX_BACKOFF_SECONDS: '60'
+  CODEORACLE_TRACES__CURSOR_OVERLAP_SECONDS: '10'
+  CODEORACLE_OTEL_ENDPOINT: http://otel-collector:4317
+  CODEORACLE_OTEL_ENABLED: 'true'
+
+x-worker-healthcheck: &worker-hc
+  test: [CMD-SHELL, test -f /proc/1/comm && grep -q '^python' /proc/1/comm]
+  interval: 5s
+  timeout: 3s
+  retries: 10
+  start_period: 15s
+
+x-app-volumes: &app-volumes
+- ../..:/workspace:ro
+- ../../tests/fixtures/llm_scripts:/workspace/tests/fixtures/llm_scripts:ro
+
+services:
+  api:
+    <<: *codeoracle-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    environment:
+      <<: [*runtime-env, *valkey-env]
+      CODEORACLE_VARIANT: api
+      CODEORACLE_API__HOST: 0.0.0.0
+      CODEORACLE_API__PORT: '8080'
+      CODEORACLE_API__AGENT_BASE_URL: http://agent:8081
+      CODEORACLE_API__AGENT_REQUEST_TIMEOUT_SECONDS: '35'
+      CODEORACLE_API__LOCK_ACQUISITION_TIMEOUT_SECONDS: '5'
+      CODEORACLE_OTEL_SERVICE_NAME: codeoracle-api
+    volumes: *app-volumes
+    ports:
+    - 8080:8080
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8080/v1/health]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  mcp:
+    <<: *codeoracle-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    environment:
+      <<: [*runtime-env, *valkey-env]
+      CODEORACLE_VARIANT: mcp
+      CODEORACLE_MCP__HOST: 0.0.0.0
+      CODEORACLE_MCP__PORT: '8082'
+      CODEORACLE_API__AGENT_BASE_URL: http://agent:8081
+      CODEORACLE_API__AGENT_REQUEST_TIMEOUT_SECONDS: '35'
+      CODEORACLE_API__LOCK_ACQUISITION_TIMEOUT_SECONDS: '5'
+      CODEORACLE_OTEL_SERVICE_NAME: codeoracle-mcp
+    command: [--http]
+    volumes: *app-volumes
+    ports:
+    - 8082:8082
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS -X POST -H 'Content-Type: application/json' --data '{\"jsonrpc\":\"2.0\",\"id\":0,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"healthcheck\",\"version\":\"0\"}}}' http://localhost:8082/mcp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  agent:
+    <<: *codeoracle-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      sourcebot:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    environment:
+      <<: *runtime-env
+      CODEORACLE_VARIANT: agent
+      CODEORACLE_AGENT__HOST: 0.0.0.0
+      CODEORACLE_AGENT__PORT: '8081'
+      CODEORACLE_SOURCEBOT__BASE_URL: http://sourcebot:3000
+      CODEORACLE_SOURCEBOT__API_KEY: dev-sourcebot-token
+      CODEORACLE_SOURCEBOT__TIMEOUT_SECONDS: '5'
+      CODEORACLE_SOURCEBOT__DEFAULT_REPO: local-self
+      CODEORACLE_OTEL_SERVICE_NAME: codeoracle-agent
+    volumes: *app-volumes
+    ports:
+    - 8081:8081
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8081/v1/health]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  joern_indexer:
+    <<: *codeoracle-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    environment:
+      <<: [*runtime-env, *valkey-env]
+      CODEORACLE_VARIANT: workers.joern_indexer
+      CODEORACLE_OTEL_SERVICE_NAME: codeoracle-joern-indexer
+    volumes: *app-volumes
+    healthcheck: *worker-hc
+
+  scip_indexer:
+    <<: *codeoracle-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    environment:
+      <<: [*runtime-env, *valkey-env]
+      CODEORACLE_VARIANT: workers.scip_indexer
+      CODEORACLE_OTEL_SERVICE_NAME: codeoracle-scip-indexer
+    volumes: *app-volumes
+    healthcheck: *worker-hc
+
+  opengrep_runner:
+    <<: *codeoracle-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    environment:
+      <<: [*runtime-env, *valkey-env]
+      CODEORACLE_VARIANT: workers.opengrep_runner
+      CODEORACLE_OTEL_SERVICE_NAME: codeoracle-opengrep-runner
+    volumes: *app-volumes
+    healthcheck: *worker-hc
+
+  embed_indexer:
+    <<: *codeoracle-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    environment:
+      <<: [*runtime-env, *valkey-env]
+      CODEORACLE_VARIANT: workers.embed_indexer
+      CODEORACLE_OTEL_SERVICE_NAME: codeoracle-embed-indexer
+    volumes: *app-volumes
+    healthcheck: *worker-hc
+
+  reindex_orchestrator:
+    <<: *codeoracle-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      joern_indexer:
+        condition: service_healthy
+      scip_indexer:
+        condition: service_healthy
+      opengrep_runner:
+        condition: service_healthy
+      embed_indexer:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    environment:
+      <<: [*runtime-env, *valkey-env]
+      CODEORACLE_VARIANT: workers.reindex_orchestrator
+      CODEORACLE_API__LOCK_ACQUISITION_TIMEOUT_SECONDS: '5'
+      CODEORACLE_OTEL_SERVICE_NAME: codeoracle-reindex-orchestrator
+    volumes: *app-volumes
+    healthcheck: *worker-hc
+
+  traces_ingest:
+    <<: *codeoracle-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+      otel-collector:
+        condition: service_healthy
+    environment:
+      <<: *runtime-env
+      CODEORACLE_VARIANT: workers.traces_ingest
+      CODEORACLE_OTEL_SERVICE_NAME: codeoracle-traces-ingest
+    volumes: *app-volumes
+    healthcheck: *worker-hc

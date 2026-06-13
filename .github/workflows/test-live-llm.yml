@@ -1,0 +1,68 @@
+name: Live-LLM Tests
+
+# Triggers:
+#  - PR labeled "run-live-llm" — manual, ad-hoc validation
+#  - Nightly schedule — catches provider drift even when no one labels
+#  - workflow_dispatch — humans can fire it from the Actions tab
+on:
+  pull_request:
+    types: [labeled]
+  schedule:
+    # 03:00 UTC nightly — outside US business hours, before EU morning
+  - cron: 0 3 * * *
+  workflow_dispatch:
+
+env:
+  UV_PYTHON: '3.14'
+
+jobs:
+  live-llm-smoke:
+    # Only run on label events when the label is exactly "run-live-llm"
+    if: |
+      (github.event_name == 'pull_request' && github.event.label.name == 'run-live-llm') ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Spec §5.7 declares this gate ADVISORY: live-LLM tests prove the
+    # platform's contract against the real provider, but their failure
+    # modes (API outage, quota exhaustion, model deprecation announced
+    # mid-PR) are external to the change under review. continue-on-error
+    # lets the job surface failures in the Actions UI without blocking
+    # merge — paired with NOT marking this workflow as a required check
+    # in branch protection. A failed run becomes a notification, not a
+    # gate; promotion to "required" is an explicit branch-protection
+    # change a human makes, not a CI default.
+    continue-on-error: true
+
+    env:
+      # CODEORACLE_LLM_OPENAI__API_KEY is what LLMConfig reads — keep ONE canonical env
+      # var rather than two (avoids "which one does the platform read?"
+      # confusion). The `OPENAI_API_KEY` secret in repo settings is mapped
+      # directly to CODEORACLE_LLM_OPENAI__API_KEY; we don't also expose it under its
+      # native name.
+      CODEORACLE_LLM_PROVIDER: openai
+      CODEORACLE_LLM_OPENAI__API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # CODEORACLE_EMBEDDING__* — required by Plan 3 Settings() fail-fast. Plan 4's
+      # smoke test path (LLMConfig → factory → OpenAIProvider.chat) doesn't
+      # touch Settings(), so these are inert TODAY but pre-seeded so the
+      # workflow file stays stable when Plan 5 adds embedding live-tests
+      # against the same gate (no Plan 5 commit needs to touch this file).
+      CODEORACLE_EMBEDDING__MODEL: text-embedding-3-small
+      CODEORACLE_EMBEDDING__DIM: '1536'
+
+    steps:
+    - uses: actions/checkout@v6.0.3
+    - uses: astral-sh/setup-uv@v8.2.0
+      with:
+        version: 0.11.21
+    - run: uv sync --frozen
+    - name: Verify live-LLM credentials present
+      run: |
+        if [ -z "$CODEORACLE_LLM_OPENAI__API_KEY" ]; then
+          echo "ERROR: OPENAI_API_KEY secret not set in repo Settings."
+          echo "Live-LLM workflow cannot run without it."
+          exit 1
+        fi
+    - name: Run live-LLM smoke tests
+      run: uv run pytest -m live_llm tests/integration/llm/ -v

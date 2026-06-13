@@ -1,0 +1,79 @@
+# Custom Semgrep rules for CodeOracle.
+#
+# These complement ruff (which handles syntactic violations) by catching
+# architectural violations and security anti-patterns. CI runs these in
+# .github/workflows/security.yml. Pre-commit runs them locally.
+
+rules:
+- id: codeoracle-llm-direct-import
+  message: >
+    Direct LLM-provider imports are forbidden outside adapters/llm/providers/.
+    Use the LLMProvider interface from codeoracle.adapters.llm instead.
+    See memory project-llm-provider-agnostic.
+  severity: ERROR
+  languages: [python]
+  pattern-either:
+  - pattern: import anthropic
+  - pattern: import openai
+  - pattern: from anthropic import ...
+  - pattern: from openai import ...
+  - pattern: import litellm
+  - pattern: from litellm import ...
+  - pattern: import ollama
+  - pattern: from ollama import ...
+  paths:
+    exclude:
+    - adapters/llm/providers/**
+    - tests/**
+
+- id: codeoracle-shell-true
+  message: >
+    subprocess.run/Popen with shell=True invites shell injection.
+    Use a list of args instead.
+  severity: ERROR
+  languages: [python]
+  pattern-either:
+  - pattern: subprocess.run(..., shell=True, ...)
+  - pattern: subprocess.Popen(..., shell=True, ...)
+  - pattern: subprocess.call(..., shell=True, ...)
+  - pattern: subprocess.check_output(..., shell=True, ...)
+
+- id: codeoracle-sql-string-concat
+  message: >
+    String concatenation for SQL is a SQL-injection vector. Use parameterized
+    queries (psycopg, SQLAlchemy bound parameters, etc.).
+  severity: ERROR
+  languages: [python]
+  pattern-either:
+  - pattern: |
+      $CONN.execute("..." + $X)
+  - pattern: |
+      $CONN.execute("..." % $X)
+  - pattern: |
+      $CONN.execute(f"...{$X}...")
+  paths:
+    exclude:
+    - tests/**
+
+- id: codeoracle-pickle-load
+  message: >
+    pickle.load() on untrusted input is a code-execution vector. Use json
+    or a typed schema (Pydantic) for evidence persistence.
+  severity: ERROR
+  languages: [python]
+  pattern-either:
+  - pattern: pickle.load(...)
+  - pattern: pickle.loads(...)
+
+- id: codeoracle-cite-bytes-required
+  message: >
+    Citation objects MUST carry the bytes from the source. Constructing a
+    Citation without 'bytes_excerpt=' is a verifier-bypass anti-pattern.
+  severity: WARNING
+  languages: [python]
+  pattern: Citation(...)
+  pattern-not: Citation(..., bytes_excerpt=$X, ...)
+  paths:
+    exclude:
+    - tests/**
+    - models/**

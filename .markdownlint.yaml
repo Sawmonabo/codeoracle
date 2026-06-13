@@ -1,0 +1,91 @@
+# Markdownlint configuration for Scribbulus
+# https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+
+# Enable all rules by default, then customize
+default: true
+
+# MD003 - Heading style: ATX style (# Heading)
+MD003:
+  style: atx
+
+# MD004 - Unordered list style: Use dashes consistently
+MD004:
+  style: dash
+
+# MD007 - Unordered list indentation: 2 spaces
+MD007:
+  indent: 2
+
+# MD009 - Trailing spaces: Allow 2 spaces for line breaks
+MD009:
+  br_spaces: 2
+  strict: true
+
+# MD010 - Hard tabs: Don't check inside code blocks
+MD010:
+  code_blocks: false
+
+# MD013 - Line length: Relaxed for technical docs
+MD013:
+  line_length: 120
+  heading_line_length: 120
+  code_block_line_length: 120
+  code_blocks: false
+  tables: false
+
+# MD024 - Multiple headings with same content: Allow for siblings
+MD024:
+  siblings_only: true
+
+# MD025 - Single top-level heading: Allow frontmatter title with H1
+MD025:
+  front_matter_title: ^\s*title\s*[:=]
+
+# MD026 - Trailing punctuation: Allow question marks
+MD026:
+  punctuation: .,;:!
+
+# MD029 - Ordered list prefix: Use ordered numbers
+MD029:
+  style: ordered
+
+# MD033 - Inline HTML: Allow specific elements for badges/shields
+MD033:
+  allowed_elements:
+  - br
+  - img
+  - a
+  - kbd
+  - sup
+  - sub
+
+# MD035 - Horizontal rule style: Use dashes
+MD035:
+  style: '---'
+
+# MD040 - Fenced code blocks need language: Required for syntax highlighting
+MD040: true
+
+# MD041 - First line should be H1: Allow front matter and badges
+MD041:
+  front_matter_title: ''
+  level: 1
+
+# MD044 - Proper nouns: Disable (too noisy for technical terms)
+MD044: false
+
+# MD046 - Code block style: Fenced style only
+MD046:
+  style: fenced
+
+# MD048 - Code fence style: Use backticks
+MD048:
+  style: backtick
+
+# MD049 - Emphasis style: Use asterisks
+MD049:
+  style: asterisk
+
+# MD050 - Strong style: Use asterisks
+MD050:
+  style: asterisk

@@ -1,0 +1,11 @@
+- request_fingerprint: ffc8898bafb8021e33984a5daa52faa4a957ac35e1558a4b6062b0ba498e910e
+  response:
+    content: ''
+    usage:
+      input_tokens: 512
+      output_tokens: 96
+    finish_reason: tool_calls
+    tool_calls:
+    - id: slice-explain-verifier-1
+      name: submit_explanation
+      arguments_json: '{"statement":"VerifierService.verify resolves each cited handle and returns the verdict supported by the resolved evidence.","confidence":0.92,"citation_indices":[0,1],"contradiction_indices":[]}'

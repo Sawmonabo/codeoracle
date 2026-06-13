@@ -1,0 +1,1 @@
+"""Joern indexer worker."""

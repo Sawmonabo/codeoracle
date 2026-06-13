@@ -1,0 +1,8 @@
+- request_fingerprint: 42f3fec81e16410825050650f84a943804bbba4be880f39d4e803f65b16436f0
+  response:
+    content: '{"status":"UNKNOWN","reason":"symbol not found in graph"}'
+    usage:
+      input_tokens: 64
+      output_tokens: 24
+    finish_reason: stop
+    tool_calls: []

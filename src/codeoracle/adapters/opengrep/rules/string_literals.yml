@@ -1,0 +1,6 @@
+rules:
+- id: codeoracle-string-literal
+  pattern: '"$VALUE"'
+  message: String literal captured for CodeOracle search evidence.
+  languages: [python]
+  severity: INFO

@@ -1,0 +1,6 @@
+{"version":2,"width":100,"height":24,"timestamp":1781308800,"env":{"SHELL":"/bin/bash","TERM":"xterm-256color"}}
+[0.1,"o","query: Explain the existing slice verifier symbol\n"]
+[0.2,"o","trace_id: trace-proven\n"]
+[0.3,"o","status: ok\n"]
+[0.4,"o","verdict.status: PROVEN\n"]
+[0.5,"o","citation handle types: CODE_SPAN,DOC_PARAGRAPH\n"]

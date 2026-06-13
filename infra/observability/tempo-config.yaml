@@ -1,0 +1,46 @@
+# Tempo config for CodeOracle local + CI stack.
+#
+# Receives:
+#   - OTLP/gRPC on 4317 (internal-only — exposed as 14317 on host)
+#
+# Storage: local block storage under /var/tempo (compose volume).
+# Production swaps for S3/GCS — not in scope for slice.
+
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+
+ingester:
+  trace_idle_period: 10s
+  max_block_duration: 5m
+
+compactor:
+  compaction:
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    local:
+      path: /var/tempo/blocks
+    wal:
+      path: /var/tempo/wal
+
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+  storage:
+    path: /var/tempo/generator/wal
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics]

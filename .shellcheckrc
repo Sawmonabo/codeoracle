@@ -1,0 +1,11 @@
+# ShellCheck configuration for Python Backend Service
+# https://github.com/koalaman/shellcheck/wiki/Ignore
+
+# Enable external source following for sourced files
+external-sources=true
+
+# Enable optional checks for better code quality
+enable=avoid-nullary-conditions
+enable=deprecate-which
+enable=quote-safe-variables
+enable=require-double-brackets

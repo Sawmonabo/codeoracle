@@ -1,0 +1,154 @@
+# CodeOracle local + CI dependency stack.
+#
+# Load image pins with:
+#   docker compose --env-file infra/versions/pinned.env \
+#     -f infra/compose/docker-compose.yml up -d
+
+services:
+  postgres:
+    image: ${IMAGE_POSTGRES_AGE:-apache/age:release_PG17}
+    container_name: codeoracle-postgres
+    environment:
+      POSTGRES_USER: codeoracle
+      POSTGRES_PASSWORD: codeoracle
+      POSTGRES_DB: codeoracle
+    volumes:
+    - postgres-data:/var/lib/postgresql/data
+    - ../scripts/bootstrap_db.sql:/docker-entrypoint-initdb.d/10-codeoracle.sql:ro
+    ports:
+    - 5432:5432
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U codeoracle -d codeoracle]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  valkey:
+    image: ${IMAGE_VALKEY:-valkey/valkey:8}
+    container_name: codeoracle-valkey
+    command: [valkey-server, --appendonly, yes]
+    volumes:
+    - valkey-data:/data
+    ports:
+    - 6379:6379
+    healthcheck:
+      test: [CMD, valkey-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  tempo:
+    image: ${IMAGE_TEMPO:-grafana/tempo:2.5.0}
+    container_name: codeoracle-tempo
+    command: [-config.file=/etc/tempo.yaml]
+    volumes:
+    - ../observability/tempo-config.yaml:/etc/tempo.yaml:ro
+    - tempo-data:/var/tempo
+    ports:
+    - 3200:3200
+    - 14317:4317
+    healthcheck:
+      test: [CMD-SHELL, wget -qO- http://localhost:3200/ready || exit 1]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  otel-collector:
+    image: ${IMAGE_OTEL_COLLECTOR:-otel/opentelemetry-collector-contrib:0.106.1}
+    container_name: codeoracle-otel-collector
+    command: [--config=/etc/otelcol-contrib/config.yaml]
+    depends_on:
+      tempo:
+        condition: service_healthy
+    volumes:
+    - ../observability/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+    - 4317:4317
+    - 4318:4318
+    - 8888:8888
+    - 8889:8889
+    - 13133:13133
+    healthcheck:
+      test: [CMD-SHELL, wget -qO- http://localhost:13133/ || exit 1]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  prometheus:
+    image: ${IMAGE_PROMETHEUS:-prom/prometheus:v2.54.1}
+    container_name: codeoracle-prometheus
+    command:
+    - --config.file=/etc/prometheus/prometheus.yml
+    - --storage.tsdb.path=/prometheus
+    - --web.enable-lifecycle
+    depends_on:
+      otel-collector:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    volumes:
+    - ../observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    - prometheus-data:/prometheus
+    ports:
+    - 9090:9090
+    healthcheck:
+      test: [CMD-SHELL, wget -qO- http://localhost:9090/-/ready || exit 1]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  grafana:
+    image: ${IMAGE_GRAFANA:-grafana/grafana:11.1.4}
+    container_name: codeoracle-grafana
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      tempo:
+        condition: service_healthy
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: codeoracle
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+    - grafana-data:/var/lib/grafana
+    - ../observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+    - 3001:3000
+    healthcheck:
+      test: [CMD-SHELL, wget -qO- http://localhost:3000/api/health || exit 1]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  sourcebot:
+    image: ${IMAGE_SOURCEBOT:-ghcr.io/sourcebot-dev/sourcebot:latest}
+    container_name: codeoracle-sourcebot
+    environment:
+      SOURCEBOT_TELEMETRY_DISABLED: 'true'
+      SOURCEBOT_AUTH_DISABLED: 'true'
+    volumes:
+    - ../..:/workspace:ro
+    - sourcebot-data:/data
+    ports:
+    - 3000:3000
+    healthcheck:
+      test: [CMD-SHELL, wget -qO- http://localhost:3000/api/health || wget -qO- http://localhost:3000/ || exit 1]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+volumes:
+  grafana-data:
+  postgres-data:
+  prometheus-data:
+  sourcebot-data:
+  tempo-data:
+  valkey-data:

@@ -1,0 +1,14 @@
+# CODEOWNERS - review routing for CodeOracle.
+#
+# Placeholder owner names are deliberately generic for the public scaffold.
+# Replace these with real GitHub teams after the repository is published.
+
+* @codeoracle/maintainers
+
+/.github/workflows/ @codeoracle/maintainers @codeoracle/security
+/infra/security/ @codeoracle/maintainers @codeoracle/security
+/infra/docker/ @codeoracle/maintainers @codeoracle/security
+/src/codeoracle/services/verifier/ @codeoracle/maintainers @codeoracle/security
+/src/codeoracle/services/trust_matrix.py @codeoracle/maintainers @codeoracle/security
+/src/codeoracle/adapters/llm/ @codeoracle/maintainers @codeoracle/security
+/docs/archive/superpowers/ @codeoracle/maintainers

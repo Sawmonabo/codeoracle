@@ -1,0 +1,13 @@
+File: src/codeoracle/example.py
+Symbol: scip-python python . . `src/codeoracle/example.py`/foo()
+Definition: 4:0-4:8
+Reference: 11:4-11:7
+Reference: 17:8-17:11
+
+File: src/codeoracle/example.py
+Symbol: scip-python python . . `src/codeoracle/example.py`/Bar#
+Definition: 20:6-20:9
+
+File: src/codeoracle/example2.py
+Symbol: scip-python python . . `src/codeoracle/example.py`/foo()
+Reference: 2:4-2:7

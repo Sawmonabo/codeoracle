@@ -1,0 +1,102 @@
+name: image-build
+
+on:
+  pull_request:
+    paths:
+    - src/**
+    - infra/docker/**
+    - pyproject.toml
+    - uv.lock
+    - .github/workflows/image-build.yml
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write   # for pushing to GHCR on main
+  security-events: write  # for Trivy SARIF upload
+
+env:
+  CODEORACLE_PYTHON_IMAGE: 3.14-slim-bookworm
+
+jobs:
+  build-and-scan:
+    name: build + Trivy
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [api, worker, cli, mcp, agent]
+
+    steps:
+    - uses: actions/checkout@v6.0.3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4.1.0
+
+    - name: Build image
+      uses: docker/build-push-action@v7.2.0
+      with:
+        context: .
+        file: infra/docker/Dockerfile
+        build-args: |
+          PYTHON_VERSION=${{ env.CODEORACLE_PYTHON_IMAGE }}
+          VARIANT=${{ matrix.variant }}
+        tags: codeoracle:${{ matrix.variant }}-pr-${{ github.event.pull_request.number || github.sha }}
+        load: true
+        cache-from: type=gha,scope=codeoracle-${{ matrix.variant }}
+        cache-to: type=gha,scope=codeoracle-${{ matrix.variant }},mode=max
+
+    - name: Trivy scan
+      uses: aquasecurity/trivy-action@v0.36.0
+      with:
+        image-ref: codeoracle:${{ matrix.variant }}-pr-${{ github.event.pull_request.number || github.sha }}
+        format: sarif
+        output: trivy-${{ matrix.variant }}.sarif
+        severity: HIGH,CRITICAL
+        exit-code: '1'
+        ignore-unfixed: true
+
+    - name: Upload Trivy SARIF
+      if: always()
+      uses: github/codeql-action/upload-sarif@v4.36.2
+      with:
+        sarif_file: trivy-${{ matrix.variant }}.sarif
+        category: trivy-${{ matrix.variant }}
+
+  build-model-server:
+    name: build model-server (build-only — CUDA absent on runners)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6.0.3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v4.1.0
+
+    - name: Build model-server image
+      uses: docker/build-push-action@v7.2.0
+      with:
+        context: .
+        file: infra/docker/Dockerfile.model-server
+        tags: codeoracle-model-server:pr-${{ github.event.pull_request.number || github.sha }}
+        load: true
+        cache-from: type=gha,scope=codeoracle-model-server
+        cache-to: type=gha,scope=codeoracle-model-server,mode=max
+
+    - name: Trivy scan model-server
+      uses: aquasecurity/trivy-action@v0.36.0
+      with:
+        image-ref: codeoracle-model-server:pr-${{ github.event.pull_request.number || github.sha }}
+        format: sarif
+        output: trivy-model-server.sarif
+        severity: HIGH,CRITICAL
+        exit-code: '1'
+        ignore-unfixed: true
+
+    - name: Upload Trivy SARIF
+      if: always()
+      uses: github/codeql-action/upload-sarif@v4.36.2
+      with:
+        sarif_file: trivy-model-server.sarif
+        category: trivy-model-server

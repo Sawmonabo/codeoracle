@@ -1,0 +1,8 @@
+- request_fingerprint: 552d64f519f5205c841ce8de2b209c68e550524db8f258b1d56569f89e2262fe
+  response:
+    content: '{"intent":"explain_symbol","symbol":"codeoracle.services.verifier.service.VerifierService.verify"}'
+    usage:
+      input_tokens: 84
+      output_tokens: 32
+    finish_reason: stop
+    tool_calls: []

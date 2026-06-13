@@ -1,0 +1,123 @@
+name: security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Daily at 03:00 UTC — catches new CVEs in pinned deps
+  - cron: 0 3 * * *
+
+permissions:
+  contents: read
+  security-events: write  # for uploading SARIF to code-scanning
+
+env:
+  UV_PYTHON: '3.14'
+
+jobs:
+  gitleaks:
+    name: gitleaks (secret scan, full history)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout (full history)
+      uses: actions/checkout@v6.0.3
+      with:
+        fetch-depth: 0
+
+    - name: Run gitleaks
+      uses: gitleaks/gitleaks-action@v3.0.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  semgrep:
+    name: semgrep (custom SAST + OWASP top 10)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:1.166.0
+    steps:
+    - uses: actions/checkout@v6.0.3
+
+    - name: Run custom rules
+      run: |
+        semgrep ci \
+          --config=infra/security/semgrep/codeoracle-custom.yml \
+          --sarif --output=semgrep-custom.sarif
+
+    - name: Run OWASP rules
+      run: |
+        semgrep ci \
+          --config=p/owasp-top-ten \
+          --config=p/python \
+          --config=p/secrets \
+          --sarif --output=semgrep-owasp.sarif
+
+    - name: Upload custom SARIF
+      if: always()
+      uses: github/codeql-action/upload-sarif@v4.36.2
+      with:
+        sarif_file: semgrep-custom.sarif
+        category: semgrep-custom
+
+    - name: Upload OWASP SARIF
+      if: always()
+      uses: github/codeql-action/upload-sarif@v4.36.2
+      with:
+        sarif_file: semgrep-owasp.sarif
+        category: semgrep-owasp
+
+  dependency-audit:
+    name: dependency CVE audit (osv-scanner)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6.0.3
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        version: 0.11.21
+
+    - name: Sync deps
+      run: uv sync --frozen
+
+    - name: Install osv-scanner
+      uses: actions/setup-go@v6.4.0
+      with:
+        go-version: 1.26.4
+    - name: Install osv-scanner binary
+      run: |
+        go install github.com/google/osv-scanner/v2/cmd/osv-scanner@v2.3.8
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+    - name: osv-scanner
+      run: osv-scanner --lockfile=uv.lock
+
+  sbom:
+    name: SBOM (cyclonedx-py)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6.0.3
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        version: 0.11.21
+
+    - name: Sync deps
+      run: uv sync --frozen
+
+    - name: Generate SBOM
+      run: |
+        uv run cyclonedx-py environment --output-format JSON \
+          --output-file sbom.json
+        uv run cyclonedx-py environment --output-format XML \
+          --output-file sbom.xml
+
+    - name: Upload SBOM
+      uses: actions/upload-artifact@v7.0.1
+      with:
+        name: sbom
+        path: |
+          sbom.json
+          sbom.xml
+        retention-days: 90

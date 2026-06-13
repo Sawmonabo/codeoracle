@@ -1,0 +1,56 @@
+name: lockfile-refresh
+
+on:
+  schedule:
+    # Weekly: Mondays at 06:00 UTC
+  - cron: 0 6 * * 1
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  UV_PYTHON: '3.14'
+
+jobs:
+  refresh:
+    name: uv lock --upgrade
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6.0.3
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        version: 0.11.21
+
+    - name: uv lock --upgrade
+      run: uv lock --upgrade
+
+    - name: Check for changes
+      id: diff
+      run: |
+        if git diff --quiet uv.lock; then
+          echo "changed=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Create pull request
+      if: steps.diff.outputs.changed == 'true'
+      uses: peter-evans/create-pull-request@v8.1.1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: chore/lockfile-refresh
+        delete-branch: true
+        title: 'chore(deps): weekly uv.lock refresh'
+        commit-message: 'chore(deps): refresh uv.lock'
+        body: |
+          Automated weekly lockfile refresh via `uv lock --upgrade`.
+
+          CI runs against this PR via the standard ci.yml + security.yml
+          workflows. Merge if CI is green.
+        labels: |
+          dependencies
+          automated

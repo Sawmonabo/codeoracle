@@ -1,0 +1,108 @@
+# Pre-commit hooks configuration for CodeOracle
+# See https://pre-commit.com for more information
+# Run `pre-commit install --install-hooks` to set up hooks
+# Run `pre-commit install --hook-type commit-msg` for commitizen
+
+default_language_version:
+  python: python3.14
+
+default_install_hook_types:
+- pre-commit
+- commit-msg
+
+repos:
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v6.0.0
+  hooks:
+  - id: check-added-large-files
+    args: [--maxkb=1000]
+  - id: check-ast
+    name: check python ast
+  - id: check-case-conflict
+  - id: check-executables-have-shebangs
+  - id: check-json
+  - id: check-merge-conflict
+  - id: check-shebang-scripts-are-executable
+  - id: check-symlinks
+  - id: check-toml
+  - id: check-yaml
+    args: [--unsafe]
+  - id: debug-statements
+  - id: destroyed-symlinks
+  - id: detect-private-key
+  - id: end-of-file-fixer
+  - id: fix-byte-order-marker
+  - id: mixed-line-ending
+    args: [--fix=lf]
+  - id: name-tests-test
+    args: [--pytest-test-first]
+    files: ^tests/
+    exclude: ^tests/(conftest\.py|factories/|fixtures/|helpers/|performance/|benchmark/conftest\.py|CLAUDE\.md)|(^|/)fixtures/|(^|/)_helpers\.py$
+  - id: no-commit-to-branch
+    args: [--branch, main, --branch, master]
+  - id: trailing-whitespace
+    args: [--markdown-linebreak-ext=md]
+- repo: https://github.com/asottile/pyupgrade
+  rev: v3.21.2
+  hooks:
+  - id: pyupgrade
+    args: [--py314-plus]
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.15.17
+  hooks:
+      # Linter must run before formatter (--fix can produce unformatted code)
+  - id: ruff-check
+    name: ruff lint
+    args: [--fix, --exit-non-zero-on-fix]
+  - id: ruff-format
+    name: ruff format
+- repo: local
+  hooks:
+  - id: ty
+    name: ty type check
+    entry: uv run ty check src/ tests/
+    language: system
+    types: [python]
+    pass_filenames: false
+- repo: https://github.com/owenlamont/uv-secure
+  rev: v0.17.2
+  hooks:
+  - id: uv-secure
+    name: uv-secure vulnerability scan
+- repo: https://github.com/commitizen-tools/commitizen
+  rev: v4.16.3
+  hooks:
+  - id: commitizen
+    name: commitizen check
+    stages: [commit-msg]
+- repo: https://github.com/codespell-project/codespell
+  rev: v2.4.2
+  hooks:
+  - id: codespell
+    name: codespell
+    args: ['--skip=*.lock,*.json']
+    types_or: [python, markdown, rst, text]
+- repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+  rev: v2.16.0
+  hooks:
+  - id: pretty-format-toml
+    args: [--autofix, --no-sort]
+  - id: pretty-format-yaml
+    args: [--autofix, --indent=2]
+- repo: https://github.com/astral-sh/uv-pre-commit
+  rev: 0.11.21
+  hooks:
+  - id: uv-lock
+    # Spec §7.7 — fail the commit if pyproject.toml drifts from uv.lock.
+- repo: https://github.com/gitleaks/gitleaks
+  rev: v8.30.1
+  hooks:
+  - id: gitleaks
+
+ci:
+  autofix_prs: true
+  autoupdate_schedule: monthly
+  skip:
+    # These require network access or heavy dependencies
+  - uv-secure
+  - ty

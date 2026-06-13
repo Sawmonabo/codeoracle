@@ -1,0 +1,51 @@
+# syntax=docker/dockerfile:1.7
+#
+# Dockerfile.model-server — vLLM CUDA runtime for self-hosted LLM serving.
+#
+# Used post-slice (production self-hosted target — spec §9 open question
+# vLLM-vs-Ollama). Slice ships the file so the image-build CI workflow
+# can scan it via Trivy as a slice-adjacent acceptance gate.
+
+ARG CUDA_VERSION=12.4.1
+ARG CUDNN_VERSION=8
+ARG UBUNTU_VERSION=22.04
+
+FROM nvidia/cuda:${CUDA_VERSION}-cudnn${CUDNN_VERSION}-runtime-ubuntu${UBUNTU_VERSION}
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive
+
+# Python 3.14 from deadsnakes
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        software-properties-common \
+        ca-certificates \
+        curl && \
+    add-apt-repository -y ppa:deadsnakes/ppa && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        python3.14 \
+        python3.14-venv \
+        python3.14-dev && \
+    rm -rf /var/lib/apt/lists/* && \
+    ln -sf /usr/bin/python3.14 /usr/local/bin/python
+
+# vLLM via pip (pre-built CUDA wheels)
+RUN curl -fsSL https://astral.sh/uv/install.sh | sh && \
+    /root/.local/bin/uv pip install --system --no-cache-dir \
+        "vllm == 0.6.3"
+
+WORKDIR /app
+
+# Non-root user
+RUN useradd --create-home --uid 1000 vllm && \
+    chown -R vllm:vllm /app
+USER vllm
+
+EXPOSE 8000
+
+# Default command — overridden by orchestration platform
+CMD ["python", "-m", "vllm.entrypoints.openai.api_server", \
+    "--host", "0.0.0.0", \
+    "--port", "8000"]

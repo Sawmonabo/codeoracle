@@ -1,0 +1,6 @@
+{"version":2,"width":100,"height":24,"timestamp":1781308800,"env":{"SHELL":"/bin/bash","TERM":"xterm-256color"}}
+[0.1,"o","query: live edit reindex\n"]
+[0.2,"o","trace_id: not-emitted-by-reindex\n"]
+[0.3,"o","status: applied\n"]
+[0.4,"o","verdict.status: APPLIED\n"]
+[0.5,"o","citation handle types: embed,joern,opengrep,scip\n"]

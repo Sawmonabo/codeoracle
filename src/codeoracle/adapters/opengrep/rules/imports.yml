@@ -1,0 +1,6 @@
+rules:
+- id: codeoracle-python-imports
+  pattern: import $MODULE
+  message: Import reference captured for CodeOracle graph extraction.
+  languages: [python]
+  severity: INFO

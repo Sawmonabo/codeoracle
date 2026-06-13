@@ -1,0 +1,6 @@
+rules:
+- id: codeoracle-python-calls
+  pattern: $FUNC(...)
+  message: Call expression captured for CodeOracle graph extraction.
+  languages: [python]
+  severity: INFO

@@ -1,0 +1,55 @@
+# OTel Collector config for CodeOracle local + CI stack.
+#
+# Receives:
+#   - OTLP/gRPC on 4317 from in-process SDK (core/telemetry.py)
+#   - OTLP/HTTP on 4318 (optional, for browser clients later)
+#
+# Exports:
+#   - traces → Tempo (otlp/tempo)
+#   - collector self-metrics → Prometheus (prometheus exporter on 8888)
+#
+# Health endpoint: 13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8888
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/tempo, debug]
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8889

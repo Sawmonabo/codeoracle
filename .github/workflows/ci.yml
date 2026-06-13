@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_call:  # callable as a reusable workflow (no inputs) — Plan 13's slice-acceptance.yml invokes the whole suite
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true  # spec §7.2 — newer pushes cancel stale runs on PRs AND main, saving CI minutes
+
+env:
+  UV_PYTHON: '3.14'
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6.0.3
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        version: 0.11.21
+        enable-cache: true
+        cache-dependency-glob: uv.lock
+    - name: Sync dependencies
+      run: uv sync --frozen
+    - name: ruff check
+      run: uv run ruff check --output-format=github
+    - name: ruff format check
+      run: uv run ruff format --check
+
+  type:
+    name: Type check (ty)
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6.0.3
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        version: 0.11.21
+        enable-cache: true
+        cache-dependency-glob: uv.lock
+    - name: Sync dependencies
+      run: uv sync --frozen
+    - name: ty check
+      run: uv run ty check src/codeoracle
+
+  test:
+    name: Unit tests + coverage
+    runs-on: ubuntu-24.04
+    env:
+      CODEORACLE_LLM_PROVIDER: mock
+    steps:
+    - uses: actions/checkout@v6.0.3
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        version: 0.11.21
+        enable-cache: true
+        cache-dependency-glob: uv.lock
+    - name: Sync dependencies
+      run: uv sync --frozen
+    - name: pytest + coverage
+      run: uv run pytest -m "not live_llm and not integration" --cov-fail-under=85
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v7.0.0
+      with:
+        file: .cache/coverage/coverage.xml
+
+  file-length-gate:
+    name: File-length gate (700-line hard ceiling)
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v6.0.3
+    - name: Install uv
+      uses: astral-sh/setup-uv@v8.2.0
+      with:
+        version: 0.11.21
+        enable-cache: true
+        cache-dependency-glob: uv.lock
+    - name: Run file-length gate
+      run: uv run python infra/scripts/check_file_length.py src/codeoracle tests
+
+  verification-pins:
+    name: Verification pins (manifest inspect + HF HEAD)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6.0.3
+
+    - name: Pinned-env consistency check
+      run: bash infra/scripts/check_pinned_env.sh
+
+    - name: Re-verify every IMAGE_* manifest still resolves
+      run: |
+        set -euo pipefail
+        source infra/versions/pinned.env
+        for var in $(grep -oE '^IMAGE_[A-Z_]+' infra/versions/pinned.env); do
+          ref="${!var}"
+          if [ -z "$ref" ]; then
+            continue
+          fi
+          echo "Verifying $var=$ref ..."
+          docker buildx imagetools inspect "$ref" --format '{{.Manifest.Digest}}' > /dev/null
+        done
+        echo "All IMAGE_* manifests still resolve."
+
+    - name: Re-verify Qwen model identifier resolves
+      run: |
+        set -euo pipefail
+        source infra/versions/pinned.env
+        if [ -z "${QWEN_MODEL_ID:-}" ]; then
+          echo "QWEN_MODEL_ID not set in pinned.env; skipping."
+          exit 0
+        fi
+        status=$(curl -fsS -o /dev/null -w "%{http_code}" -I "https://huggingface.co/${QWEN_MODEL_ID}")
+        if [ "$status" != "200" ] && [ "$status" != "401" ]; then
+          echo "::error::Qwen model HEAD request returned $status for $QWEN_MODEL_ID"
+          exit 1
+        fi
+        echo "Qwen model identifier still resolves (HTTP $status)."

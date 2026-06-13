@@ -1,0 +1,6 @@
+rules:
+- id: codeoracle-comment-mention
+  pattern-regex: '#.*'
+  message: Comment captured for CodeOracle search evidence.
+  languages: [python]
+  severity: INFO

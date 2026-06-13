@@ -1,0 +1,242 @@
+[project]
+name = "codeoracle"
+version = "0.1.0"
+description = "AI-powered codebase intelligence with source-grounded answers."
+readme = "README.md"
+requires-python = ">=3.14"
+license = {text = "MIT"}
+authors = [{name = "Sawmon Abo"}]
+dependencies = [
+  "alembic>=1.18.4",
+  "anthropic>=0.109.1",
+  "asyncpg>=0.31.0",
+  "fastapi[standard-no-fastapi-cloud-cli]>=0.136.3",
+  "httpx>=0.28.1",
+  "langgraph>=1.2.5",
+  "mcp>=1.27.2",
+  "opentelemetry-api>=1.42.1",
+  "opentelemetry-exporter-otlp>=1.42.1",
+  "opentelemetry-sdk>=1.42.1",
+  "opentelemetry-instrumentation-fastapi>=0.63b1",
+  "pgvector>=0.4.2",
+  "prometheus-client>=0.25.0",
+  "psycopg[binary]>=3.3.4",
+  "pydantic>=2.13.4",
+  "pydantic-settings>=2.14.1",
+  "PyYAML>=6.0.3",
+  "redis>=8.0.0",
+  "SQLAlchemy>=2.0.50",
+  "structlog>=26.1.0",
+  "tokenizers>=0.23.1",
+  "typer>=0.26.7",
+  "uvicorn>=0.49.0",
+  "valkey>=6.1.1",
+  "openai>=2.41.1",
+  "tiktoken>=0.13.0"
+]
+
+[project.scripts]
+codeoracle = "codeoracle.cli.__main__:main"
+codeoracle-api = "codeoracle.api.__main__:main"
+codeoracle-agent = "codeoracle.agent.__main__:main"
+codeoracle-mcp = "codeoracle.mcp.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/Sawmonabo/codeoracle"
+Documentation = "https://github.com/Sawmonabo/codeoracle#readme"
+Repository = "https://github.com/Sawmonabo/codeoracle"
+Issues = "https://github.com/Sawmonabo/codeoracle/issues"
+
+[dependency-groups]
+dev = [
+  "asciinema>=2.4.0",
+  "debugpy>=1.8.21"
+]
+lint = [
+  "codespell>=2.4.2",
+  "commitizen>=4.16.3",
+  "pre-commit>=4.6.0",
+  "pyupgrade>=3.21.2",
+  "ruff>=0.15.17",
+  "ty>=0.0.49",
+  "types-PyYAML>=6.0.12.20260518"
+]
+security = [
+  "cyclonedx-bom>=7.3.0"
+]
+test = [
+  "httpx2>=2.4.0",
+  "pytest>=9.0.3",
+  "pytest-asyncio>=1.4.0",
+  "pytest-benchmark>=5.2.3",
+  "pytest-cov>=7.1.0",
+  "pytest-docker>=3.2.5",
+  "pytest-mock>=3.15.1",
+  "respx>=0.23.1"
+]
+
+[tool.uv]
+package = true
+default-groups = ["dev", "lint", "security", "test"]
+
+[tool.ruff]
+line-length = 79
+target-version = "py314"
+src = ["src", "tests"]
+cache-dir = ".cache/ruff-root"
+extend-exclude = [
+  ".claude/",
+  ".codex/",
+  ".agents/",
+  "archive/",
+  "tmp/"
+]
+
+[tool.ruff.lint]
+select = [
+  "B",  # bugbear
+  "C",  # complexity
+  "C4",  # comprehensions
+  "C90",  # McCabe complexity (replaces "C")
+  "E",  # pycodestyle errors
+  "F",  # pyflakes
+  "I",  # isort
+  "ICN",  # import conventions
+  "ISC",  # implicit string concatenation
+  "N",  # pep8-naming
+  "PL",  # pylint
+  "PT",  # pytest
+  "RET",  # flake8-return
+  "RUF",  # ruff-specific rules
+  "SIM",  # flake8-simplify
+  "T20",  # flake8-print
+  "TID",  # flake8-tidy-imports
+  "UP",  # pyupgrade
+  "W"  # pycodestyle warnings
+]
+ignore = [
+  "B008"
+]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"openai" = {msg = "Use codeoracle.adapters.llm providers instead of direct OpenAI SDK imports."}
+"anthropic" = {msg = "Use codeoracle.adapters.llm providers instead of direct Anthropic SDK imports."}
+"litellm" = {msg = "Use codeoracle.adapters.llm providers instead of direct LiteLLM imports."}
+"ollama" = {msg = "Use codeoracle.adapters.llm providers instead of direct Ollama imports."}
+"redis" = {msg = "Use codeoracle.adapters.valkey instead of direct Redis imports."}
+"redis.asyncio" = {msg = "Use codeoracle.adapters.valkey instead of direct Redis imports."}
+"sourcebot_sdk" = {msg = "Use codeoracle.adapters.sourcebot instead of direct Sourcebot SDK imports."}
+"valkey.asyncio" = {msg = "Use codeoracle.adapters.valkey instead of direct Valkey imports."}
+
+[tool.ruff.lint.per-file-ignores]
+"src/codeoracle/adapters/llm/providers/*.py" = ["TID251"]
+"src/codeoracle/adapters/valkey/client.py" = ["TID251"]
+"tests/**/*.py" = ["B017", "PLR2004"]
+
+[tool.ruff.lint.pylint]
+max-args = 8
+
+[tool.ruff.lint.isort]
+known-first-party = ["codeoracle"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
+docstring-code-line-length = 79
+
+[tool.pytest.ini_options]
+minversion = "9.0.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = [
+  "-v",
+  "--tb=short",
+  "--import-mode=importlib",
+  "--benchmark-disable",
+  "--benchmark-storage=.cache/benchmark",
+  "--cov=codeoracle",
+  "--cov-report=term-missing",
+  "--cov-report=html:.cache/coverage/html",
+  "--cov-report=xml:.cache/coverage/coverage.xml",
+  "--junitxml=.cache/pytest/junit.xml"
+]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+cache_dir = ".cache/pytest"
+markers = [
+  "slow: marks tests as slow",
+  "integration: integration tests",
+  "unit: unit tests",
+  "e2e: end-to-end tests",
+  "benchmark: performance benchmark tests",
+  "worker: worker and queue integration tests",
+  "traces: traces and Tempo integration tests",
+  "slice: vertical slice tests",
+  "live_llm: live LLM tests",
+  "live_embeddings: live embedding provider tests",
+  "live_sourcebot: live Sourcebot tests",
+  "live_tempo: live Tempo tests"
+]
+filterwarnings = [
+  "error"
+]
+
+[tool.coverage.run]
+branch = true
+source = ["codeoracle"]
+data_file = ".cache/coverage/.coverage"
+
+[tool.coverage.report]
+fail_under = 0
+show_missing = true
+skip_covered = false
+precision = 1
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.0"
+version_files = [
+  "pyproject.toml:version",
+  "src/codeoracle/core/version.py:__version__"
+]
+tag_format = "v$version"
+update_changelog_on_bump = true
+changelog_incremental = true
+major_version_zero = true
+allowed_prefixes = ["Merge", "Revert", "chore", "build", "ci"]
+
+[tool.commitizen.customize]
+message_template = "{{change_type}}{% if scope %}({{scope}}){% endif %}{% if is_breaking %}!{% endif %}: {{subject}}{% if body %}\n\n{{body}}{% endif %}{% if footer %}\n\n{{footer}}{% endif %}"
+
+[tool.codespell]
+skip = "*.lock,*.json,.git"
+check-filenames = true
+
+[tool.ty]
+
+[tool.ty.environment]
+python-version = "3.14"
+python = ".venv"
+root = [".", "src"]
+
+[tool.ty.src]
+include = ["src/", "tests/"]
+
+[tool.ty.rules]
+possibly-unresolved-reference = "error"
+possibly-missing-attribute = "error"
+possibly-missing-import = "error"
+possibly-missing-implicit-call = "error"
+division-by-zero = "warn"
+
+[tool.ty.terminal]
+error-on-warning = true
+output-format = "full"
+
+[[tool.ty.overrides]]
+include = ["tests/**"]
+
+[tool.ty.overrides.rules]
+possibly-unresolved-reference = "warn"

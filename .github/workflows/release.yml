@@ -1,0 +1,34 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release notes
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Create or update release PR
+      id: release
+      uses: googleapis/release-please-action@v5.0.0
+      with:
+        token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        config-file: .github/release/release-please-config.json
+        manifest-file: .github/release/.release-please-manifest.json
+
+    - name: Release summary
+      if: ${{ steps.release.outputs.release_created }}
+      run: |
+        echo "Created release ${{ steps.release.outputs.tag_name }}"
+        echo "${{ steps.release.outputs.html_url }}"
